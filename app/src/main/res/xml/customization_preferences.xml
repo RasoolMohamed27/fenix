@@ -37,9 +37,11 @@
         app:iconSpaceReserved="false">
         <org.mozilla.fenix.settings.RadioButtonPreference
             android:key="@string/pref_key_toolbar_top"
+            android:enabled="false"
             android:title="@string/preference_top_toolbar" />
         <org.mozilla.fenix.settings.RadioButtonPreference
             android:key="@string/pref_key_toolbar_bottom"
+            android:enabled="false"
             android:title="@string/preference_bottom_toolbar" />
     </androidx.preference.PreferenceCategory>
 

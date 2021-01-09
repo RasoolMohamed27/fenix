@@ -13,17 +13,22 @@ import android.os.StrictMode
 import android.os.SystemClock
 import android.text.format.DateUtils
 import android.util.AttributeSet
+import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.Toast
 import androidx.annotation.CallSuper
 import androidx.annotation.IdRes
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.VisibleForTesting.PROTECTED
 import androidx.appcompat.app.ActionBar
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.coroutineScope
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDirections
@@ -39,6 +44,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import mozilla.appservices.places.BookmarkRoot
+import mozilla.components.browser.session.Session
+import mozilla.components.browser.session.SessionManager
 import mozilla.components.browser.state.search.SearchEngine
 import mozilla.components.browser.state.selector.getNormalOrPrivateTabs
 import mozilla.components.browser.state.state.SessionState
@@ -66,18 +73,15 @@ import mozilla.components.support.webextensions.WebExtensionPopupFeature
 import org.mozilla.fenix.GleanMetrics.Metrics
 import org.mozilla.fenix.addons.AddonDetailsFragmentDirections
 import org.mozilla.fenix.addons.AddonPermissionsDetailsFragmentDirections
+import org.mozilla.fenix.browser.BrowserFragmentDirections
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
 import org.mozilla.fenix.browser.browsingmode.DefaultBrowsingModeManager
+import org.mozilla.fenix.components.StoreProvider.Companion.get
 import org.mozilla.fenix.components.metrics.BreadcrumbsRecorder
 import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.exceptions.trackingprotection.TrackingProtectionExceptionsFragmentDirections
-import org.mozilla.fenix.ext.alreadyOnDestination
-import org.mozilla.fenix.ext.breadcrumb
-import org.mozilla.fenix.ext.components
-import org.mozilla.fenix.ext.metrics
-import org.mozilla.fenix.ext.nav
-import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.*
 import org.mozilla.fenix.home.HomeFragmentDirections
 import org.mozilla.fenix.home.intent.CrashReporterIntentProcessor
 import org.mozilla.fenix.home.intent.DeepLinkIntentProcessor
@@ -109,6 +113,7 @@ import org.mozilla.fenix.theme.DefaultThemeManager
 import org.mozilla.fenix.theme.ThemeManager
 import org.mozilla.fenix.utils.BrowsersCache
 import java.lang.ref.WeakReference
+import org.mozilla.fenix.ext.requireComponents
 
 /**
  * The main activity of the application. The application is primarily a single Activity (this one)
@@ -141,6 +146,8 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
     }
 
     private var inflater: LayoutInflater? = null
+    private var button: Button? = null
+
 
     private val navHost by lazy {
         supportFragmentManager.findFragmentById(R.id.container) as NavHostFragment
@@ -148,7 +155,11 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
 
     private val externalSourceIntentProcessors by lazy {
         listOf(
-            SpeechProcessingIntentProcessor(this, components.core.store, components.analytics.metrics),
+            SpeechProcessingIntentProcessor(
+                this,
+                components.core.store,
+                components.analytics.metrics
+            ),
             StartSearchIntentProcessor(components.analytics.metrics),
             DeepLinkIntentProcessor(this, components.analytics.leanplumMetricsService),
             OpenBrowserIntentProcessor(this, ::getIntentSessionId),
@@ -249,7 +260,79 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
         components.core.requestInterceptor.setNavigationController(navHost.navController)
 
         StartupTimeline.onActivityCreateEndHome(this) // DO NOT MOVE ANYTHING BELOW HERE.
+
+        var sessionManager = components.core.sessionManager
+        var customTabSessionId: String? = null
+        var customTabSession: Session?
+        customTabSession = customTabSessionId?.let { sessionManager.findSessionById(it) }
+        var currentSession = customTabSession ?: sessionManager.selectedSession
+
+        if (currentSession != null) {
+            if (currentSession.canGoBack) {
+                back.setBackgroundColor(ContextCompat.getColor(this, R.color.grey_button_color))
+            } else {
+                back.setBackgroundColor(ContextCompat.getColor(this, R.color.biometric_error_color))
+            }
+
+            if (currentSession.canGoForward) {
+                back.setBackgroundColor(ContextCompat.getColor(this, R.color.grey_button_color))
+            } else {
+                back.setBackgroundColor(ContextCompat.getColor(this, R.color.biometric_error_color))
+            }
+        }
+
+        val back = findViewById<Button>(R.id.back)
+        back?.setOnClickListener()
+        {
+            forward.setBackgroundColor(ContextCompat.getColor(this, R.color.grey_button_color))
+
+            sessionManager = components.core.sessionManager
+            customTabSession = customTabSessionId?.let { sessionManager.findSessionById(it) }
+            currentSession = customTabSession ?: sessionManager.selectedSession
+            var sessionUseCases = components.useCases.sessionUseCases
+
+            sessionUseCases.goBack.invoke(currentSession)
+            currentSession = sessionManager.selectedSession
+
+            if (currentSession!!.canGoBack) {
+                back.setBackgroundColor(ContextCompat.getColor(this, R.color.grey_button_color))
+            } else {
+                back.setBackgroundColor(
+                    ContextCompat.getColor(
+                        this,
+                        R.color.biometric_error_color
+                    )
+                )
+            }
+        }
+
+
+        val forward = findViewById<Button>(R.id.forward)
+        forward?.setOnClickListener()
+        {
+            back.setBackgroundColor(ContextCompat.getColor(this, R.color.grey_button_color))
+
+            sessionManager = components.core.sessionManager
+            customTabSession = customTabSessionId?.let { sessionManager.findSessionById(it) }
+            currentSession = customTabSession ?: sessionManager.selectedSession
+            var sessionUseCases = components.useCases.sessionUseCases
+
+            sessionUseCases.goForward.invoke(currentSession)
+            currentSession = sessionManager.selectedSession
+
+            if (currentSession!!.canGoForward) {
+                forward.setBackgroundColor(ContextCompat.getColor(this, R.color.grey_button_color))
+            } else {
+                forward.setBackgroundColor(
+                    ContextCompat.getColor(
+                        this,
+                        R.color.biometric_error_color
+                    )
+                )
+            }
+        }
     }
+
 
     protected open fun startupTelemetryOnCreateCalled(
         safeIntent: SafeIntent,
@@ -508,7 +591,7 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
     }
 
     @Suppress("MagicNumber")
-    // Defining the positions as constants doesn't seem super useful here.
+// Defining the positions as constants doesn't seem super useful here.
     private fun actionSorter(actions: Array<String>): Array<String> {
         val order = hashMapOf<String, Int>()
 
@@ -797,7 +880,10 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity {
                         searchEngine = engine.legacy()
                     )
             } else {
-                components.useCases.searchUseCases.defaultSearch.invoke(searchTermOrURL, engine.legacy())
+                components.useCases.searchUseCases.defaultSearch.invoke(
+                    searchTermOrURL,
+                    engine.legacy()
+                )
             }
         }
 

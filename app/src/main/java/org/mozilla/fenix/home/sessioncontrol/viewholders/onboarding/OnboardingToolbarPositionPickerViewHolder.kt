@@ -34,6 +34,10 @@ class OnboardingToolbarPositionPickerViewHolder(view: View) : RecyclerView.ViewH
             ToolbarPosition.BOTTOM -> radioBottomToolbar
             ToolbarPosition.TOP -> radioTopToolbar
         }
+        /*radio = when (settings.toptoolbarPosition) {
+            ToolbarPosition.BOTTOM -> radioBottomToolbar
+            ToolbarPosition.TOP -> radioTopToolbar
+        }*/
         radio.updateRadioValue(true)
 
         radioBottomToolbar.onClickListener {

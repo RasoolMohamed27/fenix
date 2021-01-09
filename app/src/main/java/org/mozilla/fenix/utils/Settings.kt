@@ -539,7 +539,15 @@ class Settings(private val appContext: Context) : PreferencesHolder {
     )
 
     val toolbarPosition: ToolbarPosition
-        get() = if (shouldUseBottomToolbar) ToolbarPosition.BOTTOM else ToolbarPosition.TOP
+        //get() = if (shouldUseBottomToolbar) ToolbarPosition.BOTTOM else ToolbarPosition.TOP
+        get() = ToolbarPosition.TOP
+
+    val toptoolbarPosition: ToolbarPosition
+        get() = ToolbarPosition.TOP
+
+    val bottomtoolbarPosition: ToolbarPosition
+        get() = ToolbarPosition.BOTTOM
+
 
     /**
      * Check each active accessibility service to see if it can perform gestures, if any can,
